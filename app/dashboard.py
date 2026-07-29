@@ -134,3 +134,52 @@ st.download_button(
 
 with st.expander("Validated model candidates (AIC shortlist → out-of-sample MAPE)"):
     st.dataframe(validated_df, use_container_width=True)
+
+# ---------------------------------------------------------------------------
+# Claude operational interpretation
+# ---------------------------------------------------------------------------
+
+st.markdown("---")
+st.markdown("### AI Operational Commentary")
+st.caption(
+    "Claude translates the forecast into staffing and capacity planning language "
+    "for operations managers. Requires ANTHROPIC_API_KEY in a .env file."
+)
+
+import os
+from dotenv import load_dotenv
+load_dotenv()
+
+if not os.getenv("ANTHROPIC_API_KEY"):
+    st.info(
+        "Add ANTHROPIC_API_KEY to a .env file in the project root to enable "
+        "plain-language operational commentary from Claude."
+    )
+else:
+    use_case = st.text_input(
+        "Planning use case",
+        value="call centre staffing and capacity planning",
+        help="Describe how this forecast will be used operationally.",
+    )
+    if st.button("Generate operational commentary", type="primary"):
+        from claude_interpreter import ForecastInterpreter
+        best_baseline_mape = comparison[
+            comparison["model"] != "SARIMA (grid searched)"
+        ]["mape"].min()
+        model_label = f"SARIMA{best_row['order']}x{best_row['seasonal_order']}"
+        with st.spinner("Asking Claude to interpret the forecast..."):
+            try:
+                interpreter = ForecastInterpreter()
+                commentary = interpreter.interpret(
+                    model_label=model_label,
+                    test_mape=best_row["test_mape"],
+                    baseline_mape=best_baseline_mape,
+                    improvement_pct=improvement,
+                    forecast_df=forecast_df,
+                    series_tail=series.iloc[-12:],
+                    horizon=forecast_horizon,
+                    use_case=use_case,
+                )
+                st.markdown(commentary)
+            except Exception as e:
+                st.error(f"Claude API error: {e}")
